@@ -13,9 +13,14 @@
 	},
 	"dependencies": {
 		"@opennextjs/cloudflare": "^1.6.2",
+		"@stream-io/node-sdk": "^0.5.1",
+		"@stream-io/video-react-sdk": "^1.19.1",
+		"date-fns": "^4.1.0",
 		"next": "15.3.5",
 		"react": "^19.0.0",
-		"react-dom": "^19.0.0"
+		"react-dom": "^19.0.0",
+		"stream-chat": "^9.13.0",
+		"swr": "^2.3.4"
 	},
 	"devDependencies": {
 		"@eslint/eslintrc": "^3",

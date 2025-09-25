@@ -1,103 +1,230 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import {
+  StreamCall,
+  StreamVideo,
+  StreamVideoClient,
+  CallControls,
+  SpeakerLayout,
+  StreamTheme,
+  useCallStateHooks,
+  BackgroundFiltersProvider,
+  useBackgroundFilters,
+} from '@stream-io/video-react-sdk'
+import '@stream-io/video-react-sdk/dist/css/styles.css'
+import { formatDuration, intervalToDuration } from 'date-fns'
+import vi from 'date-fns/locale/vi'
+import { api_url } from '@/api'
+import Image from 'next/image'
+
+let isLoaded = false
+
+function MyBackgroundFilterSettings() {
+  const {
+    isSupported,
+    isReady,
+    disableBackgroundFilter,
+    applyBackgroundBlurFilter,
+    applyBackgroundImageFilter,
+    backgroundImages,
+  } = useBackgroundFilters()
+
+  if (!isSupported) return null
+  if (!isReady) return <div className="my-loading-indicator" />
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.js
-            </code>
-            .
+    <div className="background-box">
+      <h3>Hiệu ứng phông nền</h3>
+      <ul>
+        <li>
+          <button onClick={disableBackgroundFilter}>
+            <Image width={60} height={60} src="/nobackground.jpg" alt="none" />
+          </button>
+        </li>
+        <li>
+          <button onClick={() => applyBackgroundBlurFilter('medium')}>
+            <Image width={60} height={60} src="/blur.jpg" alt="blur" />
+          </button>
+        </li>
+        {backgroundImages.map((image, index) => (
+          <li key={image}>
+            <button onClick={() => applyBackgroundImageFilter(image)}>
+              <Image width={60} height={60} src={image} alt="background" />
+            </button>
           </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        ))}
+      </ul>
     </div>
-  );
+  )
+}
+
+function useSessionTimer() {
+  const { useCallSession } = useCallStateHooks()
+  const session = useCallSession()
+  const [remainingMs, setRemainingMs] = useState(Number.NaN)
+
+  useEffect(() => {
+    if (!session?.timer_ends_at) return
+    const timerEndAt = new Date(session.timer_ends_at)
+    const handle = setInterval(() => {
+      const now = new Date()
+      setRemainingMs(+timerEndAt - +now)
+    }, 1000)
+    return () => clearInterval(handle)
+  }, [session])
+
+  return remainingMs
+}
+
+function SessionTimer() {
+  const remainingMs = useSessionTimer()
+  if (remainingMs < 0) return null
+  return (
+    <div className="session-timer" style={{ textAlign: 'center' }}>
+      {formatDuration(intervalToDuration({ start: Date.now(), end: Date.now() + remainingMs }), { locale: vi })}
+    </div>
+  )
+}
+
+function PageWithParams() {
+  const searchParams = useSearchParams()
+  const userId = searchParams.get('userId')
+  const phongkhamId = searchParams.get('phongkhamId')
+
+  const [client, setClient] = useState(null)
+  const [call, setCall] = useState(null)
+  const [sessionId, setSessionId] = useState('')
+
+  const validateCall = async () => {
+    const res = await fetch(`${api_url()}kham_online_auth?userId=${userId}&phongkhamId=${phongkhamId}`)
+    return res.json()
+  }
+
+  useEffect(() => {
+    if (!userId || !phongkhamId) {
+      alert('Thông tin không hợp lệ. Truy cập sẽ được chuyển hướng về trang chủ.')
+      window.location.href = 'https://bcare.vn'
+      return
+    }
+
+    validateCall().then((res) => {
+      if (res.type === 'success') {
+        initCall(res)
+      } else {
+        alert(res.message)
+        window.location.href = 'https://bcare.vn'
+      }
+    })
+  }, [userId, phongkhamId])
+
+  const initCall = async (dkkInfo) => {
+    if (isLoaded) return
+    isLoaded = true
+
+    const apiKey = 'pnwf8hccjv6n'
+    const tokenProvider = async () => {
+      const res = await fetch('/create-token?userId=' + userId)
+      const text = await res.text()
+      const match = text.match(/<div id="token">(.*?)<\/div>/)
+      return match?.[1] || null
+    }
+
+    const user = {
+      id: userId,
+      name: dkkInfo.data.user_info.hovaten,
+      image: dkkInfo.data.user_info.avatar,
+    }
+
+    const streamClient = new StreamVideoClient({
+      apiKey,
+      user,
+      tokenProvider,
+      options: { maxConnectUserRetries: 2 },
+    })
+
+    const callInstance = streamClient.call('default', phongkhamId)
+    const startsAt = new Date(Date.now() + 30 * 60 * 1000)
+
+    await callInstance.join({
+      create: true,
+      data: {
+        starts_at: startsAt,
+        settings_override: {
+          limits: { max_duration_seconds: 1500 },
+        },
+        mic_default_on: true,
+        speaker_default_on: true,
+        camera_default_on: true,
+        backstage: true,
+      },
+    })
+
+    setClient(streamClient)
+    setCall(callInstance)
+  }
+
+  useEffect(() => {
+    if (!client || !call) return
+
+    call.startTranscription({ language: 'en' })
+
+    const unsub = client.on('all', (event) => {
+      if (event.type === 'call.session_participant_joined') {
+        const uid = event?.participant?.user?.id
+        const sid = event?.participant?.user_session_id
+        if (uid === userId) {
+          if (sessionId === '') {
+            setSessionId(sid)
+          } else if (sid !== sessionId) {
+            alert('Có người dùng cùng ID truy cập')
+            call.leave()
+          }
+        }
+      }
+    })
+
+    return () => unsub.unsubscribe?.()
+  }, [client, call, sessionId, userId])
+
+  if (client && call) {
+    return (
+      <div className="container-call">
+        <StreamVideo client={client}>
+          <StreamCall call={call}>
+            <StreamTheme>
+              <BackgroundFiltersProvider
+                backgroundImages={['/bg1.jpg', '/bg2.jpg', '/bg3.jpg', '/bg4.jpg', '/bg5.jpg', '/bg6.jpg']}
+              >
+                <SessionTimer />
+                <SpeakerLayout />
+                <CallControls />
+                <MyBackgroundFilterSettings />
+              </BackgroundFiltersProvider>
+            </StreamTheme>
+          </StreamCall>
+        </StreamVideo>
+      </div>
+    )
+  }
+
+  return (
+    <div className="call-placerholder-box">
+      <div>
+        <div className="is-animating mb-2">
+          <Image src="/logo.png" width={150} height={150} alt="Bcare" className="logo" />
+        </div>
+        <span className="animating-text">Đang xác thực thông tin phiên khám ...</span>
+      </div>
+    </div>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div>Đang tải...</div>}>
+      <PageWithParams />
+    </Suspense>
+  )
 }
